@@ -302,9 +302,37 @@
   }
 
   /* ---------- 播放控制 ---------- */
+  /* ---------- iOS PWA 音訊解鎖 ---------- */
+  function ensureCtx() {
+    /* iOS 16.4+:走 playback 通道,不被靜音撥桿與 standalone 模式蓋掉 */
+    if ('audioSession' in navigator) {
+      try { navigator.audioSession.type = 'playback'; } catch (e) {}
+    }
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      /* iOS 有非標準的 interrupted 狀態(來電、切 app),自動救回 */
+      ctx.onstatechange = function () {
+        if (playing && ctx.state !== 'running') ctx.resume();
+      };
+    }
+    if (ctx.state !== 'running') {
+      ctx.resume();
+      /* 播一個無聲 buffer,強制在使用者手勢內解鎖音訊管線 */
+      var buf = ctx.createBuffer(1, 1, 22050);
+      var src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+    }
+  }
+  /* 第一次碰任何地方就先解鎖 */
+  document.addEventListener('touchend', function unlock() {
+    ensureCtx();
+    document.removeEventListener('touchend', unlock);
+  });
+
   function start() {
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === 'suspended') ctx.resume();
+    ensureCtx();
     playing = true;
     beatIndex = 0;
     swingLeft = true;
@@ -339,7 +367,10 @@
     if (wakeLock) { wakeLock.release(); wakeLock = null; }
   }
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && playing) requestWake();
+    if (document.visibilityState === 'visible' && playing) {
+      requestWake();
+      if (ctx && ctx.state !== 'running') ctx.resume();
+    }
   });
 
   /* ---------- BPM 調整 ---------- */
