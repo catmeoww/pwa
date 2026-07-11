@@ -1,0 +1,12 @@
+{
+  "name": "節拍器 Beat Buddy",
+  "short_name": "節拍器",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#10142B",
+  "theme_color": "#10142B",
+  "icons": [
+    { "src": "icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
