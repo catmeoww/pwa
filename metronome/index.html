@@ -165,6 +165,15 @@
   .sig.sel { background: var(--amber); color: var(--ink); }
   .sig-label { text-align: center; color: var(--muted); font-size: 12px; margin-bottom: 4px; font-weight: 600; }
 
+  .accent-toggle {
+    display: block; width: 100%;
+    padding: 12px 0; margin: 0 0 10px;
+    border-radius: 14px; border: none;
+    background: var(--card); color: var(--muted);
+    font-size: 15px; font-weight: 700; font-family: inherit;
+  }
+  .accent-toggle.on { background: var(--coral); color: var(--ink); }
+
   /* ===== 主按鈕 ===== */
   .actions { display: flex; gap: 12px; padding: 6px 0 14px; }
   .play {
@@ -221,6 +230,8 @@
   <button class="sig" data-n="6">6</button>
 </div>
 
+<button class="accent-toggle on" id="accentToggle">🔔 第一拍重音:開</button>
+
 <div class="actions">
   <button class="play" id="play">▶ 開始</button>
   <button class="tap" id="tap">拍一拍<br>找速度</button>
@@ -228,10 +239,11 @@
 
 <script>
 (function () {
-  var bpm = 100, beatsPerBar = 4, playing = false;
+  var bpm = 100, beatsPerBar = 4, playing = false, accentOn = true;
   var ctx = null, nextNoteTime = 0, beatIndex = 0, timerId = null;
   var visualQueue = [];
-  var LOOKAHEAD = 25, AHEAD = 0.12;
+  var mediaDest = null, mediaEl = null;
+  var LOOKAHEAD = 25, AHEAD = 0.25;
   var swingLeft = true;
   var wakeLock = null;
 
@@ -247,7 +259,7 @@
     beatsEl.innerHTML = '';
     for (var i = 0; i < beatsPerBar; i++) {
       var d = document.createElement('div');
-      d.className = 'dot' + (i === 0 ? ' accent' : '');
+      d.className = 'dot' + (accentOn && i === 0 ? ' accent' : '');
       beatsEl.appendChild(d);
     }
   }
@@ -261,7 +273,7 @@
     osc.frequency.value = accent ? 1568 : 1047; /* G6 / C6,清脆木魚感 */
     gain.gain.setValueAtTime(accent ? 0.6 : 0.4, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(mediaDest ? mediaDest : ctx.destination);
     osc.start(time);
     osc.stop(time + 0.08);
   }
@@ -269,7 +281,7 @@
   /* ---------- 精準排程器 ---------- */
   function scheduler() {
     while (nextNoteTime < ctx.currentTime + AHEAD) {
-      var accent = (beatIndex % beatsPerBar) === 0;
+      var accent = accentOn && (beatIndex % beatsPerBar) === 0;
       click(nextNoteTime, accent);
       visualQueue.push({ time: nextNoteTime, beat: beatIndex % beatsPerBar });
       nextNoteTime += 60 / bpm;
@@ -310,6 +322,13 @@
     }
     if (!ctx) {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
+      /* 走 <audio> 媒體播放輸出,鎖屏後聲音不會被切掉 */
+      try {
+        mediaDest = ctx.createMediaStreamDestination();
+        mediaEl = new Audio();
+        mediaEl.srcObject = mediaDest.stream;
+        mediaEl.setAttribute('playsinline', '');
+      } catch (e) { mediaDest = null; }
       /* iOS 有非標準的 interrupted 狀態(來電、切 app),自動救回 */
       ctx.onstatechange = function () {
         if (playing && ctx.state !== 'running') ctx.resume();
@@ -343,6 +362,15 @@
     playBtn.textContent = '⏸ 停止';
     playBtn.classList.add('playing');
     requestWake();
+    if (mediaEl) { mediaEl.play().catch(function () {}); }
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: '節拍器 ' + bpm + ' BPM', artist: 'Beat Buddy' });
+      navigator.mediaSession.playbackState = 'playing';
+      try {
+        navigator.mediaSession.setActionHandler('pause', function () { stop(); });
+        navigator.mediaSession.setActionHandler('play', function () { start(); });
+      } catch (e) {}
+    }
   }
   function stop() {
     playing = false;
@@ -350,6 +378,8 @@
     visualQueue = [];
     playBtn.textContent = '▶ 開始';
     playBtn.classList.remove('playing');
+    if (mediaEl) mediaEl.pause();
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
     pendulum.style.transform = 'translateX(-50%) rotate(0deg)';
     var dots = beatsEl.children;
     for (var i = 0; i < dots.length; i++) dots[i].classList.remove('on');
@@ -416,6 +446,19 @@
     document.querySelectorAll('.sig').forEach(function (b) { b.classList.toggle('sel', b === s); });
     buildDots();
     beatIndex = 0;
+  });
+
+  /* ---------- 第一拍重音開關 ---------- */
+  var accentBtn = document.getElementById('accentToggle');
+  accentBtn.addEventListener('click', function () {
+    accentOn = !accentOn;
+    accentBtn.classList.toggle('on', accentOn);
+    accentBtn.textContent = accentOn ? '\uD83D\uDD14 \u7B2C\u4E00\u62CD\u91CD\u97F3\uFF1A\u958B' : '\uD83D\uDD15 \u7B2C\u4E00\u62CD\u91CD\u97F3\uFF1A\u95DC';
+    /* 關掉時拍點不再標紅 */
+    var dots = beatsEl.children;
+    for (var i = 0; i < dots.length; i++) {
+      dots[i].classList.toggle('accent', accentOn && i === 0);
+    }
   });
 
   /* ---------- Tap tempo ---------- */
