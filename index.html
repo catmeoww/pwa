@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="節拍器">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<title>節拍器 Beat Buddy</title>
+<style>
+  :root {
+    --ink: #10142B;
+    --stage: #171C38;
+    --card: #202750;
+    --amber: #FFC94D;
+    --coral: #FF7A6E;
+    --mint: #6EE7C8;
+    --text: #F5F3EC;
+    --muted: #8B92BE;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: ui-rounded, "SF Pro Rounded", "PingFang TC", -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  /* ===== 擺錘舞台 ===== */
+  .stage {
+    flex: 1 1 0;
+    min-height: 160px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: radial-gradient(ellipse at 50% 110%, #232A55 0%, var(--ink) 70%);
+    border-radius: 24px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .pendulum {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    width: 6px;
+    height: 62%;
+    transform-origin: 50% 0%;
+    transform: translateX(-50%) rotate(0deg);
+    transition: transform 0.5s cubic-bezier(0.45, 0, 0.55, 1);
+  }
+  .arm {
+    position: absolute;
+    top: 0; left: 50%;
+    width: 6px; height: 100%;
+    transform: translateX(-50%);
+    background: linear-gradient(#3A4378, #565FA0);
+    border-radius: 3px;
+  }
+  .bob {
+    position: absolute;
+    bottom: -26px; left: 50%;
+    transform: translateX(-50%);
+    width: 58px; height: 58px;
+    background: radial-gradient(circle at 35% 30%, #FFE08A, var(--amber) 65%);
+    border-radius: 50%;
+    box-shadow: 0 6px 18px rgba(255, 201, 77, 0.35);
+  }
+  .bob::before, .bob::after {  /* 眼睛 */
+    content: ""; position: absolute; top: 20px;
+    width: 7px; height: 10px; border-radius: 50%;
+    background: var(--ink);
+  }
+  .bob::before { left: 16px; }
+  .bob::after { right: 16px; }
+  .bob .mouth {
+    position: absolute; top: 32px; left: 50%;
+    transform: translateX(-50%);
+    width: 16px; height: 8px;
+    border-bottom: 3px solid var(--ink);
+    border-radius: 0 0 16px 16px;
+  }
+  .bob.pop { animation: squish 0.18s ease-out; }
+  @keyframes squish {
+    0% { transform: translateX(-50%) scale(1.25, 0.8); }
+    100% { transform: translateX(-50%) scale(1, 1); }
+  }
+  .pivot {
+    position: absolute; top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 14px; height: 14px;
+    background: #565FA0; border-radius: 50%;
+    z-index: 2;
+  }
+
+  /* ===== 拍點 ===== */
+  .beats {
+    display: flex; justify-content: center; gap: 14px;
+    padding: 14px 0 4px;
+  }
+  .dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--card);
+    border: 2px solid #3A4378;
+    transition: transform 0.1s, background 0.1s;
+  }
+  .dot.on { background: var(--mint); border-color: var(--mint); transform: scale(1.35); }
+  .dot.accent.on { background: var(--coral); border-color: var(--coral); }
+
+  /* ===== BPM ===== */
+  .bpm-row {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 2px 0;
+  }
+  .bpm-num {
+    font-size: 88px; font-weight: 800; line-height: 1;
+    font-variant-numeric: tabular-nums;
+    min-width: 190px; text-align: center;
+  }
+  .bpm-label { color: var(--muted); font-size: 15px; text-align: center; margin-top: -6px; font-weight: 600; letter-spacing: 2px; }
+  .step {
+    width: 64px; height: 64px; border-radius: 50%;
+    border: none; background: var(--card); color: var(--text);
+    font-size: 34px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step:active { background: #2C3568; }
+
+  input[type=range] {
+    width: 100%; margin: 14px 0 4px;
+    -webkit-appearance: none; appearance: none;
+    height: 10px; border-radius: 5px;
+    background: var(--card);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+  }
+
+  /* ===== 速度預設 & 拍號 ===== */
+  .chips { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
+  .chip {
+    flex: 1; padding: 10px 0; border-radius: 14px; border: none;
+    background: var(--card); color: var(--muted);
+    font-size: 14px; font-weight: 700; font-family: inherit;
+  }
+  .chip.sel { background: var(--mint); color: var(--ink); }
+  .chip small { display: block; font-size: 11px; font-weight: 500; opacity: 0.75; }
+
+  .sig-row { display: flex; gap: 8px; justify-content: center; margin: 4px 0 10px; }
+  .sig {
+    width: 56px; padding: 10px 0; border-radius: 14px; border: none;
+    background: var(--card); color: var(--muted);
+    font-size: 16px; font-weight: 800; font-family: inherit;
+  }
+  .sig.sel { background: var(--amber); color: var(--ink); }
+  .sig-label { text-align: center; color: var(--muted); font-size: 12px; margin-bottom: 4px; font-weight: 600; }
+
+  .accent-toggle {
+    display: block; width: 100%;
+    padding: 12px 0; margin: 0 0 10px;
+    border-radius: 14px; border: none;
+    background: var(--card); color: var(--muted);
+    font-size: 15px; font-weight: 700; font-family: inherit;
+  }
+  .accent-toggle.on { background: var(--coral); color: var(--ink); }
+
+  /* ===== 主按鈕 ===== */
+  .actions { display: flex; gap: 12px; padding: 6px 0 14px; }
+  .play {
+    flex: 2; height: 74px; border-radius: 22px; border: none;
+    background: var(--coral); color: var(--ink);
+    font-size: 26px; font-weight: 800; font-family: inherit;
+    box-shadow: 0 6px 0 #C74E44;
+  }
+  .play:active { transform: translateY(3px); box-shadow: 0 3px 0 #C74E44; }
+  .play.playing { background: var(--mint); box-shadow: 0 6px 0 #3FA98C; }
+  .play.playing:active { box-shadow: 0 3px 0 #3FA98C; }
+  .tap {
+    flex: 1; height: 74px; border-radius: 22px; border: none;
+    background: var(--card); color: var(--text);
+    font-size: 17px; font-weight: 700; font-family: inherit;
+    box-shadow: 0 6px 0 #12173A;
+  }
+  .tap:active { transform: translateY(3px); box-shadow: 0 3px 0 #12173A; background: #2C3568; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="pivot"></div>
+  <div class="pendulum" id="pendulum">
+    <div class="arm"></div>
+    <div class="bob" id="bob"><div class="mouth"></div></div>
+  </div>
+</div>
+
+<div class="beats" id="beats"></div>
+
+<div class="bpm-row">
+  <button class="step" id="minus">−</button>
+  <div class="bpm-num" id="bpmNum">100</div>
+  <button class="step" id="plus">＋</button>
+</div>
+<div class="bpm-label">BPM 每分鐘拍數</div>
+
+<input type="range" id="slider" min="40" max="208" value="100">
+
+<div class="chips" id="chips">
+  <button class="chip" data-bpm="60">慢慢的<small>Largo 60</small></button>
+  <button class="chip" data-bpm="76">走路速度<small>Andante 76</small></button>
+  <button class="chip sel" data-bpm="100">中等<small>Moderato 100</small></button>
+  <button class="chip" data-bpm="132">快快的<small>Allegro 132</small></button>
+</div>
+
+<div class="sig-label">每小節幾拍</div>
+<div class="sig-row" id="sigs">
+  <button class="sig" data-n="2">2</button>
+  <button class="sig" data-n="3">3</button>
+  <button class="sig sel" data-n="4">4</button>
+  <button class="sig" data-n="6">6</button>
+</div>
+
+<button class="accent-toggle on" id="accentToggle">🔔 第一拍重音:開</button>
+
+<div class="actions">
+  <button class="play" id="play">▶ 開始</button>
+  <button class="tap" id="tap">拍一拍<br>找速度</button>
+</div>
+
+<script>
+(function () {
+  var bpm = 100, beatsPerBar = 4, playing = false, accentOn = true;
+  var ctx = null, nextNoteTime = 0, beatIndex = 0, timerId = null;
+  var visualQueue = [];
+  var mediaEl = null;
+  var LOOKAHEAD = 25, AHEAD = 0.25;
+  var swingLeft = true;
+  var wakeLock = null;
+
+  var bpmNum = document.getElementById('bpmNum');
+  var slider = document.getElementById('slider');
+  var playBtn = document.getElementById('play');
+  var pendulum = document.getElementById('pendulum');
+  var bob = document.getElementById('bob');
+  var beatsEl = document.getElementById('beats');
+
+  /* ---------- 拍點 UI ---------- */
+  function buildDots() {
+    beatsEl.innerHTML = '';
+    for (var i = 0; i < beatsPerBar; i++) {
+      var d = document.createElement('div');
+      d.className = 'dot' + (accentOn && i === 0 ? ' accent' : '');
+      beatsEl.appendChild(d);
+    }
+  }
+  buildDots();
+
+  /* ---------- 聲音 ---------- */
+  function click(time, accent) {
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = accent ? 1568 : 1047; /* G6 / C6,清脆木魚感 */
+    gain.gain.setValueAtTime(accent ? 0.6 : 0.4, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.08);
+  }
+
+  /* ---------- 精準排程器 ---------- */
+  function scheduler() {
+    while (nextNoteTime < ctx.currentTime + AHEAD) {
+      var accent = accentOn && (beatIndex % beatsPerBar) === 0;
+      click(nextNoteTime, accent);
+      visualQueue.push({ time: nextNoteTime, beat: beatIndex % beatsPerBar });
+      nextNoteTime += 60 / bpm;
+      beatIndex++;
+    }
+  }
+
+  function draw() {
+    if (!playing) return;
+    var now = ctx.currentTime;
+    while (visualQueue.length && visualQueue[0].time <= now) {
+      var e = visualQueue.shift();
+      showBeat(e.beat);
+    }
+    requestAnimationFrame(draw);
+  }
+
+  function showBeat(b) {
+    var dots = beatsEl.children;
+    for (var i = 0; i < dots.length; i++) dots[i].classList.toggle('on', i === b);
+    /* 擺錘 */
+    var interval = 60 / bpm;
+    pendulum.style.transition = 'transform ' + interval + 's cubic-bezier(0.45,0,0.55,1)';
+    var angle = Math.min(28, 14 + 900 / bpm);
+    pendulum.style.transform = 'translateX(-50%) rotate(' + (swingLeft ? -angle : angle) + 'deg)';
+    swingLeft = !swingLeft;
+    bob.classList.remove('pop');
+    void bob.offsetWidth;
+    bob.classList.add('pop');
+  }
+
+  /* ---------- 播放控制 ---------- */
+  /* ---------- iOS PWA 音訊解鎖 ---------- */
+  function ensureCtx() {
+    /* iOS 16.4+:走 playback 通道,不被靜音撥桿與 standalone 模式蓋掉 */
+    if ('audioSession' in navigator) {
+      try { navigator.audioSession.type = 'playback'; } catch (e) {}
+    }
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      /* 無聲循環音檔撐住媒體播放狀態,鎖屏後 Web Audio 才能繼續出聲 */
+      try {
+        mediaEl = new Audio('data:audio/wav;base64,UklGRmQfAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUAfAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==');
+        mediaEl.loop = true;
+        mediaEl.volume = 0.01;
+        mediaEl.setAttribute('playsinline', '');
+      } catch (e) { mediaEl = null; }
+      /* iOS 有非標準的 interrupted 狀態(來電、切 app),自動救回 */
+      ctx.onstatechange = function () {
+        if (playing && ctx.state !== 'running') ctx.resume();
+      };
+    }
+    if (ctx.state !== 'running') {
+      ctx.resume();
+      /* 播一個無聲 buffer,強制在使用者手勢內解鎖音訊管線 */
+      var buf = ctx.createBuffer(1, 1, 22050);
+      var src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+    }
+  }
+  /* 第一次碰任何地方就先解鎖 */
+  document.addEventListener('touchend', function unlock() {
+    ensureCtx();
+    document.removeEventListener('touchend', unlock);
+  });
+
+  function start() {
+    ensureCtx();
+    playing = true;
+    beatIndex = 0;
+    swingLeft = true;
+    visualQueue = [];
+    nextNoteTime = ctx.currentTime + 0.1;
+    timerId = setInterval(scheduler, LOOKAHEAD);
+    requestAnimationFrame(draw);
+    playBtn.textContent = '⏸ 停止';
+    playBtn.classList.add('playing');
+    requestWake();
+    if (mediaEl) { mediaEl.play().catch(function () {}); }
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: '節拍器 ' + bpm + ' BPM', artist: 'Beat Buddy' });
+      navigator.mediaSession.playbackState = 'playing';
+      try {
+        navigator.mediaSession.setActionHandler('pause', function () { stop(); });
+        navigator.mediaSession.setActionHandler('play', function () { start(); });
+      } catch (e) {}
+    }
+  }
+  function stop() {
+    playing = false;
+    clearInterval(timerId);
+    visualQueue = [];
+    playBtn.textContent = '▶ 開始';
+    playBtn.classList.remove('playing');
+    if (mediaEl) mediaEl.pause();
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+    pendulum.style.transform = 'translateX(-50%) rotate(0deg)';
+    var dots = beatsEl.children;
+    for (var i = 0; i < dots.length; i++) dots[i].classList.remove('on');
+    releaseWake();
+  }
+  playBtn.addEventListener('click', function () { playing ? stop() : start(); });
+
+  /* ---------- 螢幕常亮 ---------- */
+  function requestWake() {
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () {});
+    }
+  }
+  function releaseWake() {
+    if (wakeLock) { wakeLock.release(); wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && playing) {
+      requestWake();
+      if (ctx && ctx.state !== 'running') ctx.resume();
+    }
+  });
+
+  /* ---------- BPM 調整 ---------- */
+  function setBpm(v) {
+    bpm = Math.max(40, Math.min(208, Math.round(v)));
+    bpmNum.textContent = bpm;
+    slider.value = bpm;
+    var chips = document.querySelectorAll('.chip');
+    chips.forEach(function (c) { c.classList.toggle('sel', +c.dataset.bpm === bpm); });
+  }
+  slider.addEventListener('input', function () { setBpm(this.value); });
+
+  /* 長按 +/- 連續調整 */
+  function holdButton(el, delta) {
+    var iv = null, to = null;
+    function press(e) {
+      e.preventDefault();
+      setBpm(bpm + delta);
+      to = setTimeout(function () { iv = setInterval(function () { setBpm(bpm + delta); }, 70); }, 450);
+    }
+    function release() { clearTimeout(to); clearInterval(iv); }
+    el.addEventListener('touchstart', press, { passive: false });
+    el.addEventListener('touchend', release);
+    el.addEventListener('touchcancel', release);
+    el.addEventListener('mousedown', press);
+    el.addEventListener('mouseup', release);
+    el.addEventListener('mouseleave', release);
+  }
+  holdButton(document.getElementById('minus'), -1);
+  holdButton(document.getElementById('plus'), +1);
+
+  /* ---------- 速度預設 ---------- */
+  document.getElementById('chips').addEventListener('click', function (e) {
+    var chip = e.target.closest('.chip');
+    if (chip) setBpm(+chip.dataset.bpm);
+  });
+
+  /* ---------- 拍號 ---------- */
+  document.getElementById('sigs').addEventListener('click', function (e) {
+    var s = e.target.closest('.sig');
+    if (!s) return;
+    beatsPerBar = +s.dataset.n;
+    document.querySelectorAll('.sig').forEach(function (b) { b.classList.toggle('sel', b === s); });
+    buildDots();
+    beatIndex = 0;
+  });
+
+  /* ---------- 第一拍重音開關 ---------- */
+  var accentBtn = document.getElementById('accentToggle');
+  accentBtn.addEventListener('click', function () {
+    accentOn = !accentOn;
+    accentBtn.classList.toggle('on', accentOn);
+    accentBtn.textContent = accentOn ? '\uD83D\uDD14 \u7B2C\u4E00\u62CD\u91CD\u97F3\uFF1A\u958B' : '\uD83D\uDD15 \u7B2C\u4E00\u62CD\u91CD\u97F3\uFF1A\u95DC';
+    /* 關掉時拍點不再標紅 */
+    var dots = beatsEl.children;
+    for (var i = 0; i < dots.length; i++) {
+      dots[i].classList.toggle('accent', accentOn && i === 0);
+    }
+  });
+
+  /* ---------- Tap tempo ---------- */
+  var taps = [];
+  document.getElementById('tap').addEventListener('click', function () {
+    var now = performance.now();
+    taps = taps.filter(function (t) { return now - t < 2500; });
+    taps.push(now);
+    if (taps.length >= 2) {
+      var sum = 0;
+      for (var i = 1; i < taps.length; i++) sum += taps[i] - taps[i - 1];
+      setBpm(60000 / (sum / (taps.length - 1)));
+    }
+  });
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
